@@ -5,11 +5,28 @@ from openpyxl.styles import Color, PatternFill, Font, Border
 from openpyxl.styles import colors
 import os
 
+
+## we want to get data through only the common data section
+## will have a file, where in each tab/ column heading, comes from such and such node
+## dictionary to get to a path, from each node
+## extract path to look at from dictionary
+## I can pull the infromation through
+
+
 ## have to put in for loop for every tdef
 
 def find_namespace_declaration(root): ## this is the namespace helper function 
     name = root.tag.split('}')[0][1:]
     return name
+
+tree = ET.parse('TDEF_files/AB12.tdef')
+root = tree.getroot()
+namespace_name = find_namespace_declaration(root)
+namespace = {'ns': str(namespace_name)}
+
+test_id = root.findtext('./ns:CommonData/ns:TestId', namespaces=namespace)
+print(test_id)
+
 
 def fill_color_cell_grey(cell):
     cell = str(cell)
@@ -82,7 +99,6 @@ for tdef_file in tdef_files:
     namespace = {'ns': str(namespace_name)}
     detection_type = root.findtext(f'.//ns:DetectionType', namespaces=namespace) #indicates luminometer or not
     system_monitoring = root.findtext(f'.//ns:IsSystemMonitoringTest', namespaces=namespace) # indicates whether it is system monitoring or not
-    print(system_monitoring, tdef_file)
     if detection_type =='Luminometer': ## if not luminometer, we don't consider it 
         filtered_tdefs.append(tdef_file)
 
@@ -107,17 +123,13 @@ while row_num <= len(tdef_files_ordered):  # use the number of XML files
 
     row = sheet[row_num]
     for col_num in range(1, min(len(row), 13)):
-        print(f"Processing row {row_num}, column {col_num}, count{count}")
-
         header_value = headers[count]
 
         if header_value == 'Analyte\nStability':
             value_to_add = ""
             cell = get_cell_number(row_num, col_num)
             fill_color_cell_grey(cell)
-            
         else:
-            print(header_value)
             header = header_val[header_value]
             value_to_add = root.findtext(f'.//ns:{header}', namespaces=namespace) 
 
@@ -139,7 +151,6 @@ while row_num <= len(tdef_files_ordered):  # use the number of XML files
         if row_num == len(tdef_files) + 2:
             break
         # Write the value to the cell
-        print(value_to_add)
         c = sheet.cell(row = row_num, column = col_num)
         c.value = value_to_add
 
