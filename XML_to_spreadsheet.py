@@ -4,29 +4,11 @@ from openpyxl import load_workbook
 from openpyxl.styles import Color, PatternFill, Font, Border
 from openpyxl.styles import colors
 import os
-
-
-## we want to get data through only the common data section
-## will have a file, where in each tab/ column heading, comes from such and such node
-## dictionary to get to a path, from each node
-## extract path to look at from dictionary
-## I can pull the infromation through
-
-
-## have to put in for loop for every tdef
+from helper import value
 
 def find_namespace_declaration(root): ## this is the namespace helper function 
     name = root.tag.split('}')[0][1:]
     return name
-
-tree = ET.parse('TDEF_files/AB12.tdef')
-root = tree.getroot()
-namespace_name = find_namespace_declaration(root)
-namespace = {'ns': str(namespace_name)}
-
-test_id = root.findtext('./ns:CommonData/ns:TestId', namespaces=namespace)
-print(test_id)
-
 
 def fill_color_cell_grey(cell):
     cell = str(cell)
@@ -53,23 +35,18 @@ def get_cell_number(row_num, col_num):
     
     return cell_number
 
+def create_row_of_black_cells(sheet, row_num, start_col, end_col, color):
+    fill = PatternFill(start_color=color, end_color=color, fill_type='solid')
+
+    # Iterate over the columns in the row and fill each cell with the specified color
+    for col_num in range(start_col, end_col + 1):
+        cell = sheet.cell(row=row_num, column=col_num)
+        cell.fill = fill
+
 ## loads open the excel file that i want to edit
 wb = op.load_workbook('C:\\Users\\z004ymfp\\Downloads\\TDEF_TESTER_common1.xlsx')
 sheet = wb.active
 
-##Dictionary to match the column header name with the val to get out of TDEF file
-## No need for 'Analyte\nStability' since it is left blank
-header_val = {'Test\nName': 'TestName', 
-              'Test\nType': 'TestTypeID',
-              'Test\nVersion': "TestVersion", 
-              'Display\nName':"TestName",
-              'Print\nName':"TestName",
-              'LIS\nCode': "TestName", 
-              'LOINC': "LOINC", 
-              'Status': "StatusID", 
-              'Result\nReview\nMode': "ResultReviewMode", 
-              'Reuse\nResult': "ReuseResult", 
-              'Result\nTime\nLimit': "ResultTimeLimit", }
 
 ## this will give me a list of all the tdef files
 tdef_files = []
@@ -81,9 +58,8 @@ for file in files_in_folder:
         tdef_files.append(file)
 
 count = 0
-tdef_files_len = len(tdef_files)
-headers = ['Test\nName', 'Test\nType', 'Test\nVersion', 'Display\nName', 'Print\nName', 'LIS\nCode',
-           'LOINC', 'Status', 'Result\nReview\nMode', 'Reuse\nResult', 'Result\nTime\nLimit', 'Analyte\nStability']
+headers_common1 = ['TestName', 'TestTypeID', "TestVersion", "TestName", "TestName", "TestName",
+           'LOINC', 'StatusID', 'ResultReviewMode', 'ReuseResult', 'ResultTimeLimit', 'Analyte\nStability']
 tdef_files_iter = iter(tdef_files)  # convert tdef_files to an iterator
 
 ## need to iterate through all the xml files and see if it is luminometer
@@ -97,8 +73,7 @@ for tdef_file in tdef_files:
     root = tree.getroot()
     namespace_name = find_namespace_declaration(root)
     namespace = {'ns': str(namespace_name)}
-    detection_type = root.findtext(f'.//ns:DetectionType', namespaces=namespace) #indicates luminometer or not
-    system_monitoring = root.findtext(f'.//ns:IsSystemMonitoringTest', namespaces=namespace) # indicates whether it is system monitoring or not
+    detection_type, system_monitoring = value(tdef_file, './/ns:DetectionType', '', tree, namespace),  value(tdef_file, './/ns:IsSystemMonitoringTest', '', tree, namespace) 
     if detection_type =='Luminometer': ## if not luminometer, we don't consider it 
         filtered_tdefs.append(tdef_file)
 
@@ -110,9 +85,6 @@ for tdef_file in tdef_files:
         tdef_files_ordered_iter = iter(tdef_files_ordered)
 
 
-
-
-
 row_num = 3  # start from 3rd row
 while row_num <= len(tdef_files_ordered):  # use the number of XML files
     xml_file = next(tdef_files_ordered_iter)  # get the next XML file
@@ -122,18 +94,23 @@ while row_num <= len(tdef_files_ordered):  # use the number of XML files
     namespace = {'ns': str(namespace_name)}
 
     row = sheet[row_num]
-    for col_num in range(1, min(len(row), 13)):
-        header_value = headers[count]
+    print(len(systemMonitoring_false), row_num)
+    if row_num + 3 == len(systemMonitoring_false):
+        create_row_of_black_cells(sheet, row_num, 1, 12, '000000')
+        row_num += 1
+
+    for col_num in range(1, 13):
+        header_value = headers_common1[count]
 
         if header_value == 'Analyte\nStability':
             value_to_add = ""
             cell = get_cell_number(row_num, col_num)
             fill_color_cell_grey(cell)
         else:
-            header = header_val[header_value]
-            value_to_add = root.findtext(f'.//ns:{header}', namespaces=namespace) 
+            #header = header_val[header_value]
+            value_to_add = value(xml_file, './/ns:', header_value, tree, namespace) 
 
-            if header_value == "Reuse\nResult":
+            if header_value == "ReuseResult":
                 if value_to_add == "true":
                     value_to_add = 'X'
                 else:
@@ -148,11 +125,14 @@ while row_num <= len(tdef_files_ordered):  # use the number of XML files
             row_num += 1 
         else:
             count += 1 
-        if row_num == len(tdef_files) + 2:
+        if row_num == len(tdef_files_ordered) + 2:
             break
         # Write the value to the cell
-        c = sheet.cell(row = row_num, column = col_num)
+        c = sheet.cell(row=row_num, column=col_num)
         c.value = value_to_add
-
-
 wb.save('C:\\Users\\z004ymfp\\Downloads\\TDEF_TESTER_common1.xlsx')
+
+## from here I want to move to the next file in the order 
+
+
+
